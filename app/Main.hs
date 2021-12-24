@@ -5,7 +5,8 @@ import Control.Monad.Trans.Writer.CPS
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
-import System.Environment (getArgs)
+import System.Environment
+import qualified Data.Text as T
 
 -- Dimension of the puzzle. This is used for Puzzle Env
 newtype Env = Env {dim :: (Int, Int)}
@@ -13,7 +14,7 @@ newtype Env = Env {dim :: (Int, Int)}
 
 -- (x,y) determine the position
 -- 'z' determines the value in the location
-type Vector = (Int, Int, Maybe Int) 
+type Vector = (Int, Int, Maybe Int)
 
 -- List of Locations will hold the current state of the puzzle
 -- Whatever changes in a app will belong to the State
@@ -29,8 +30,18 @@ runApp = do
            x <- lift $ lift ask
         --    let y = print x 
         --    z <-  lift $ lift y
-           return () 
-           
+           return ()
+
+
+
+-- pack will convert String to Text
+-- Prelude Data.Text> :t splitOn 
+-- splitOn :: Text -> Text -> [Text]
+-- Use "unpack" to convert back to String
+parseFile :: String -> IO ()
+parseFile path = do
+                   s <- readFile path
+                   print $ T.splitOn (T.pack "\n") (T.pack s)
 
 
 -- sum [1,2,3] = foldr (+) 0 [1,2,3]
@@ -38,13 +49,16 @@ runApp = do
 -- [1,2,3] === 1+(2+(3:+0))
 
 printArgs:: [String] -> IO ()
-printArgs xs = foldr ((>>) . putStrLn) (putStrLn "") xs
+printArgs = foldr ((>>) . putStrLn) (putStrLn "")
 
 
 cli :: IO [String]
-cli = getArgs 
+cli = getArgs
 
 main :: IO ()
-main = cli >>= printArgs
+main = do
+         args <- cli
+         printArgs args
+         parseFile $ head args
 -- Real world usage of uncurry
 -- main = cli >>= (uncurry animate)
