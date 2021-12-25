@@ -32,6 +32,8 @@ executable sudoku-cli
     build-depends:    base ^>=4.14.1.0
                       , text
                       , transformers
+                      , random
+                      , regex-tdfa
                       , sudoku
     hs-source-dirs:   app
     default-language: Haskell2010
