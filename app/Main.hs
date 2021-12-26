@@ -6,13 +6,14 @@ import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import System.Environment
-import System.Random
-import Text.Regex.TDFA
+-- import System.Random
+-- import Text.Regex.TDFA
+import qualified Text.Read as R
 import qualified Data.Text as T
 import Data.Maybe (Maybe(Nothing))
 
 -- Dimension of the puzzle. This is used for Puzzle Env
-data Env = Env {dim :: [Int], quad :: [Int]}
+data Env = Env {dim :: [Int], quad :: [Int], n_x :: Int, n_y ::Int }
                 deriving Show
 
 -- (x,y) determine the position
@@ -74,7 +75,7 @@ appWithoutState :: ReaderT Env IO (((), String), Grid)
 appWithoutState = runStateT appWithoutWriter testGrid
 
 appWithoutReader :: IO (((), String), Grid)
-appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2])
+appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
 
 
 -- pack will convert String to Text
@@ -101,21 +102,51 @@ parseFile path = do
 
 -- TODO: Create a function to convert the ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] to proper 'Grid' type
 -- s = ["DIM=4x4","QUAD=2x2","_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
-convStr2VD :: [String] -> (Maybe Env, Maybe Grid)
-convStr2VD (d:q:xs) =
-                  let dimRegex = "^DIM=[0-9]+x[0-9]+$"
-                      quadRegex = "^QUAD=[0-9]+x[0-9]+$"
-                  in
-                  if (d =~ dimRegex :: Bool) && (q =~ quadRegex :: Bool) then
-                    let fd = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack d) !! 1)
-                        fq = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack q) !! 1)
-                        dim =  fmap ((\x -> read x::Int ) . T.unpack) fd
-                        quad = fmap ((\x -> read x::Int ) . T.unpack) fq in
-                        (Just $ Env {dim = dim, quad = quad}, Nothing)
-                  else
-                    (Nothing, Nothing)
+-- convStr2VD :: [String] -> (Maybe Env, Maybe Grid)
+-- convStr2VD (d:q:xs) =
+--                   -- TODO: remove the regex redundancy 
+--                   let dimRegex = "^DIM=[0-9]+x[0-9]+$"
+--                       quadRegex = "^QUAD=[0-9]+x[0-9]+$"
+--                   in
+--                   if (d =~ dimRegex :: Bool) && (q =~ quadRegex :: Bool) then
+--                     let fd = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack d) !! 1)
+--                         fq = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack q) !! 1)
+--                         dim =  fmap ((\x -> read x::Int ) . T.unpack) fd
+--                         quad = fmap ((\x -> read x::Int ) . T.unpack) fq in
+--                         (Just $ Env {dim = dim, quad = quad}, Nothing)
+--                   else
+--                     (Nothing, Nothing)
+
+tsplit :: String -> [Maybe Int]
+tsplit s = (\x -> R.readMaybe x::(Maybe Int)) . T.unpack <$> T.splitOn ( T.pack "," ) (T.pack s)
+-- Functor Law g <$> f <$> ~ g . f <$>
+
+-- convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
+convStr2Arr :: [String] -> [[Maybe Int]]
+convStr2Arr  = fmap tsplit
 
 
+getQuad :: [Int] -> [Int] -> Int -> ([Int], [Int])
+getQuad x1 x2 n = let p1 = tList x1 n
+                      p2 = tList x2 n in
+                  repLists (p1,p2)
+
+tList :: [Int] -> Int -> [[Int]]
+tList [] _ = []
+tList xs d = take d xs : tList (drop d xs) d
+
+repLists :: ([[Int]], [[Int]]) -> ([Int], [Int])
+repLists p | (x1,x2) <- p = let p1 = head (take 1 x1)
+                                p2 = head (take 1 $ drop 1 x1)  in
+                                ( concat (p1:take 1 x2) , concat (p2: take 1 (drop 1 x2)) )
+
+getTranspose :: [[Maybe Int]] ->  [[Maybe Int]]
+getTranspose [[],[],[],[]] = replicate 4 []
+getTranspose [ p1:p1s, p2:p2s , p3:p3s , p4:p4s] = [p1, p2, p3, p4] : getTranspose [p1s,p2s,p3s,p4s]
+
+
+checkElem :: Maybe Int -> [Maybe Int] -> Bool
+checkElem elem xs =  or $ (== elem) <$> xs
 
 -- convStr2VD :: [String] -> Maybe Env
 -- convStr2VD (x:xs) =
