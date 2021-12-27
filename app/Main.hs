@@ -191,24 +191,39 @@ getPossibleElems ys1 ys2 ys3 = filter (/= 0) $ foldr ((:) . (\x -> if x `elem` y
 replaceLocElem :: [Locx] -> Locx -> Int -> [Locx]
 replaceLocElem [] _ _ = []
 replaceLocElem xs eLoc@(Loc e _) pos
-  | (pos < 0) || (pos >= length xs) || ( e > 4) || (e < 1)  = xs
+  | pos < 0 || pos >= length xs   = xs
   | otherwise = take pos xs ++ (eLoc : drop (pos+1) xs)
 
 -- TODO: Replace with applicatives or fmap
 replaceLocList :: [[Locx]] -> [Locx] -> Int -> [[Locx]]
 replaceLocList [] _ _ = []
 replaceLocList lxs xs pos
-  | (pos < 0) || (pos >= length lxs) = lxs
+  | pos < 0 || pos >= length lxs = lxs
   | otherwise = take pos lxs ++ (xs : drop (pos+1) lxs)
 
 
 -- TODO: Create list of possible values 
--- getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
--- getPossibleValues (x,y) lxs = let g = getInts <$> lxs
---                                   gT = (getTranspose g)
---                                   qMap = generateQuad 4 2
---                                   getQs = getQuadrant g ((qmap !! x) !! y)
---                                   possibleElems = getPossibleElems (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs)
+getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
+getPossibleValues (x,y) lxs = let g = getInts <$> lxs
+                                  gT = getTranspose g
+                                  qMap = generateQuad 4 2
+                                  getQs = getQuadrant g (qMap !! x !! y)
+                                  possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
+                                 --  possibleElems = getPossibleElems (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
+                                  eLoc@(Loc e xs) = lxs !! x !! y in
+                              replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) y
+
+-- Apply zip to combine idx for values
+-- *Main> d = zip [1..4] $ (3*) <$> [1..4]
+-- [(1,3),(2,6),(3,9),(4,12)]
+-- Apply 'foldr' with fmap to modify the values
+-- (\(x,y)-> x+ y) <$>foldr (:) [] d
+-- [4,8,12,16]
+-- Replace a specific element in the list
+-- *Main> (\(x,y)-> if(x ==2) then y*3 else y ) <$>foldr (:) [] d
+-- [3,18,9,12]
+
+
 
 -- (,) <$> [0..3] <*> [0..3]
 -- computeGrid :: (Int, Int) -> [[Int]] -> [Int] 
