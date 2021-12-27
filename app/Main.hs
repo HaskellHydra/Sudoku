@@ -1,6 +1,5 @@
 module Main where
 -- import Sudoku.CLI (cli)
-
 import Control.Monad.Trans.Writer.CPS
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans.Reader
@@ -168,7 +167,6 @@ generateQuad dim quad = let q = take dim $ generateSeq 1 dim
                             (p3,p4) = repLists (tList (q!!2) quad, tList (q!!3) quad)  in
                         [p1,p2,p3,p4]
 
-
 getQuadrant :: [[Int]] -> Int -> [Int]
 getQuadrant lxs q =
                   let (q1, q2) = repLists ( tList (head $ take 1 lxs) 2, tList (head $ take 1 $ drop 1 lxs) 2)
@@ -187,19 +185,29 @@ findMissingElems xs = filter (/= 0) $ (\ys -> foldr ((:) . (\x -> if x `notElem`
 getPossibleElems :: [Int] -> [Int] ->[Int] ->[Int]
 getPossibleElems ys1 ys2 ys3 = filter (/= 0) $ foldr ((:) . (\x -> if x `elem` ys1 && x `elem` ys2 && x `elem` ys3 then x else 0 )) [] [1..4]
 
--- TODO: Replace with applicatives or fmap
+-- The below case will take care of all the pattern matching
+-- Combine idx with the value in the list to form a [(idx, x)]
 replaceLocElem :: [Locx] -> Locx -> Int -> [Locx]
-replaceLocElem [] _ _ = []
-replaceLocElem xs eLoc@(Loc e _) pos
-  | pos < 0 || pos >= length xs   = xs
-  | otherwise = take pos xs ++ (eLoc : drop (pos+1) xs)
+replaceLocElem xs eLoc@(Loc e _) pos = let d = zip [0..(length xs - 1)] xs in
+                                       (\(x,y)-> if x == pos then eLoc else y ) <$> foldr (:) [] d
 
--- TODO: Replace with applicatives or fmap
+-- -- Older implementation
+-- replaceLocElem :: [Locx] -> Locx -> Int -> [Locx]
+-- replaceLocElem [] _ _ = []
+-- replaceLocElem xs eLoc@(Loc e _) pos
+--   | pos < 0 || pos >= length xs   = xs
+--   | otherwise = take pos xs ++ (eLoc : drop (pos+1) xs)
+
 replaceLocList :: [[Locx]] -> [Locx] -> Int -> [[Locx]]
-replaceLocList [] _ _ = []
-replaceLocList lxs xs pos
-  | pos < 0 || pos >= length lxs = lxs
-  | otherwise = take pos lxs ++ (xs : drop (pos+1) lxs)
+replaceLocList lxs xs pos = let d = zip [0..(length lxs - 1)] lxs in
+                                       (\(x,y)-> if x == pos then xs else y ) <$> foldr (:) [] d
+
+-- -- Older implementation
+-- replaceLocList :: [[Locx]] -> [Locx] -> Int -> [[Locx]]
+-- replaceLocList [] _ _ = []
+-- replaceLocList lxs xs pos
+--   | pos < 0 || pos >= length lxs = lxs
+--   | otherwise = take pos lxs ++ (xs : drop (pos+1) lxs)
 
 
 -- TODO: Create list of possible values 
@@ -211,7 +219,10 @@ getPossibleValues (x,y) lxs = let g = getInts <$> lxs
                                   possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
                                  --  possibleElems = getPossibleElems (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
                                   eLoc@(Loc e xs) = lxs !! x !! y in
-                              replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) y
+                              if e == 0 then
+                                replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) x
+                              else
+                                 lxs
 
 -- Apply zip to combine idx for values
 -- *Main> d = zip [1..4] $ (3*) <$> [1..4]
