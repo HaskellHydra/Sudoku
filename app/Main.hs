@@ -11,6 +11,7 @@ import System.Environment
 import qualified Text.Read as R
 import qualified Data.Text as T
 import Data.Maybe (Maybe(Nothing))
+import Data.Bifunctor
 
 -- Dimension of the puzzle. This is used for Puzzle Env
 data Env = Env {dim :: [Int], quad :: [Int], n_x :: Int, n_y ::Int }
@@ -20,11 +21,15 @@ data Env = Env {dim :: [Int], quad :: [Int], n_x :: Int, n_y ::Int }
 -- 'z' determines the value in the location
 type Vector = (Int, Int, Maybe Int)
 
+data Loc a b = Loc a b
+           deriving Show
+
+type Locx = Loc Int [[Int]]
 -- each quadrant is a 2D grid
-type Quadrant = [[Maybe Int]]
+type Grid = [[Locx]]
 
 -- A grid is a group of 2D quadrants 
-type Grid = [[[[Maybe Int]]]]
+-- type Grid = [[[[Maybe Int]]]]
 
 -- List of Locations will hold the current state of the puzzle
 -- Whatever changes in a app will belong to the State
@@ -52,8 +57,8 @@ type App a = WriterT String (StateT Grid (ReaderT Env IO)) a
 -- runReaderT (runStateT (runWriterT runApp) [[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]] )  (Env [4,4] [2,2])
 -- (((),""),[[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]])
 
-testGrid :: Grid
-testGrid = [[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]]
+-- testGrid :: Grid
+-- testGrid = [[Nothing,Just 3,Just 4,Nothing],[Just 4,Nothing,Nothing,Just 2],[Just 1,Nothing,Nothing,Just 3],[Nothing,Just 2,Just 1,Nothing]]
 
 runApp :: App ()
 runApp = do
@@ -71,11 +76,11 @@ runApp = do
 appWithoutWriter :: StateT Grid (ReaderT Env IO) ((), String)
 appWithoutWriter = runWriterT runApp
 
-appWithoutState :: ReaderT Env IO (((), String), Grid)
-appWithoutState = runStateT appWithoutWriter testGrid
+-- appWithoutState :: ReaderT Env IO (((), String), Grid)
+-- appWithoutState = runStateT appWithoutWriter testGrid
 
-appWithoutReader :: IO (((), String), Grid)
-appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
+-- appWithoutReader :: IO (((), String), Grid)
+-- appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
 
 
 -- pack will convert String to Text
@@ -117,13 +122,19 @@ parseFile path = do
 --                   else
 --                     (Nothing, Nothing)
 
-tsplit :: String -> [Maybe Int]
-tsplit s = (\x -> R.readMaybe x::(Maybe Int)) . T.unpack <$> T.splitOn ( T.pack "," ) (T.pack s)
+tsplit :: String -> [Loc Int [[Int]]]
+tsplit s = (\x -> if x == "_" then Loc 0 [] else Loc (R.read x::Int) [] ) . T.unpack <$> T.splitOn ( T.pack "," ) (T.pack s)
 -- Functor Law g <$> f <$> ~ g . f <$>
 
 -- convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
-convStr2Arr :: [String] -> [[Maybe Int]]
+convStr2Arr :: [String] -> [[Locx]]
 convStr2Arr  = fmap tsplit
+
+-- apply getInts <$> grid to get the whole grid ---> [[Int]]
+getInts:: [Locx] -> [Int] -- get only the values 
+getInts lxs = do
+                Loc x _ <- lxs
+                foldr (:) [] [x]
 
 
 getQuad :: [Int] -> [Int] -> Int -> ([Int], [Int])
@@ -140,13 +151,56 @@ repLists p | (x1,x2) <- p = let p1 = head (take 1 x1)
                                 p2 = head (take 1 $ drop 1 x1)  in
                                 ( concat (p1:take 1 x2) , concat (p2: take 1 (drop 1 x2)) )
 
-getTranspose :: [[Maybe Int]] ->  [[Maybe Int]]
-getTranspose [[],[],[],[]] = replicate 4 []
+getTranspose :: [[Int]] ->  [[Int]]
+getTranspose [[],[],[],[]] = []
 getTranspose [ p1:p1s, p2:p2s , p3:p3s , p4:p4s] = [p1, p2, p3, p4] : getTranspose [p1s,p2s,p3s,p4s]
 
 
 checkElem :: Maybe Int -> [Maybe Int] -> Bool
 checkElem elem xs =  or $ (== elem) <$> xs
+
+generateSeq :: Int -> Int -> [[Int]]
+generateSeq x dim = replicate dim x : generateSeq (x+1) dim
+
+generateQuad :: Int -> Int -> [[Int]]
+generateQuad dim quad = let q = take dim $ generateSeq 1 dim
+                            (p1,p2) = repLists ( tList (head q) quad, tList (q!!1) quad )
+                            (p3,p4) = repLists (tList (q!!2) quad, tList (q!!3) quad)  in
+                        [p1,p2,p3,p4]
+
+
+getQuadrant :: [[Int]] -> Int -> [Int]
+getQuadrant lxs q =
+                  let (q1, q2) = repLists ( tList (head $ take 1 lxs) 2, tList (head $ take 1 $ drop 1 lxs) 2)
+                      (q3, q4) = repLists ( tList (head $ take 1 $ drop 2 lxs) 2, tList (head $ take 1 $ drop 3 lxs) 2) in
+                  case q of
+                    1 -> q1
+                    2 -> q2
+                    3 -> q3
+                    4 -> q4
+                    _ -> []
+
+
+findMissingElems :: [Int] -> [Int]
+findMissingElems xs = filter (/= 0) $ (\ys -> foldr ((:) . (\x -> if x `notElem` ys then x else 0 )) [] [1..4] ) xs
+
+getPossibleElems :: [Int] -> [Int] ->[Int] ->[Int]
+getPossibleElems ys1 ys2 ys3 = filter (/= 0) $ foldr ((:) . (\x -> if x `elem` ys1 && x `elem` ys2 && x `elem` ys3 then x else 0 )) [] [1..4]
+
+-- TODO: Create list of possible values 
+-- getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
+-- getPossibleValues (x,y) lxs = let g = getInts <$> lxs
+--                                   gT = (getTranspose g)
+--                                   qMap = generateQuad 4 2
+--                                   getQs = getQuadrant g ((qmap !! x) !! y)
+--                                   possibleElems = getPossibleElems (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs)
+
+-- (,) <$> [0..3] <*> [0..3]
+-- computeGrid :: (Int, Int) -> [[Int]] -> [Int] 
+-- computeGrid (x,y) grid = case (grid !! x) !! y of
+--                           Just n -> [n]
+--                           Nothing -> []
+
 
 -- convStr2VD :: [String] -> Maybe Env
 -- convStr2VD (x:xs) =
