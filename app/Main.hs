@@ -60,8 +60,13 @@ type App a = WriterT String (StateT (Grid, Coor, PrevVal) (ReaderT Env IO)) a
 -- runReaderT (runStateT (runWriterT runApp) [[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]] )  (Env [4,4] [2,2])
 -- (((),""),[[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]])
 
--- testGrid :: Grid
--- testGrid = [[Nothing,Just 3,Just 4,Nothing],[Just 4,Nothing,Nothing,Just 2],[Just 1,Nothing,Nothing,Just 3],[Nothing,Just 2,Just 1,Nothing]]
+testGrid :: Grid
+testGrid = [[Loc 0 [[2,3]],Loc 3 [],Loc 4 [],Loc 0 [[1,2]]],[Loc 1 [],Loc 4 [],Loc 0 [[2,3]],Loc 2 []],[Loc 0 [[3,4]],Loc 2 [],Loc 1 [],Loc 4 []],[Loc 4 [],Loc 1 [],Loc 2 [],Loc 3 []]]
+  
+  -- convStr2Arr  ["_,_,4,_","1,_,_,_","_,2,_,_","_,_,_,3"] -- difficult
+  -- convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] -- easy
+  
+  -- [[Loc 0 [],Loc 3 [],Loc 4 [],Loc 0 []],[Loc 4 [],Loc 0 [],Loc 0 [],Loc 2 []],[Loc 1 [],Loc 0 [],Loc 0 [],Loc 3 []],[Loc 0 [],Loc 2 [],Loc 1 [],Loc 0 []]]
 
 test:: [Int] -> String
 test s =
@@ -125,14 +130,15 @@ runApp = do
 -- [3,1,1,1,4,2,2,3,3,4,1,3,2,4,4,3]
 
 
--- appWithoutWriter :: StateT Grid (ReaderT Env IO) ((), String)
--- appWithoutWriter = runWriterT runApp
+appWithoutWriter :: StateT (Grid, Coor, PrevVal) (ReaderT Env IO) ((), String)
+appWithoutWriter = runWriterT runApp
 
--- appWithoutState :: ReaderT Env IO (((), String), Grid)
--- appWithoutState = runStateT appWithoutWriter testGrid
+appWithoutState :: ReaderT Env IO (((), String), (Grid, Coor, PrevVal))
+appWithoutState = let coor = (,) <$> [0..3] <*> [0..3] in 
+                    runStateT appWithoutWriter (testGrid, coor, (0,(0,0))) -- initial prevVal will be overwritten in the 1st run
 
--- appWithoutReader :: IO (((), String), Grid)
--- appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
+appWithoutReader :: IO (((), String), (Grid, Coor, PrevVal))
+appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
 
 
 -- pack will convert String to Text
