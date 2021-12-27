@@ -27,6 +27,10 @@ type Locx = Loc Int [[Int]]
 -- each quadrant is a 2D grid
 type Grid = [[Locx]]
 
+type Coor = [(Int, Int)]
+
+type PrevVal = (Int, (Int, Int))
+
 -- A grid is a group of 2D quadrants 
 -- type Grid = [[[[Maybe Int]]]]
 
@@ -34,7 +38,7 @@ type Grid = [[Locx]]
 -- Whatever changes in a app will belong to the State
 type Location = Maybe Vector
 
-type App a = WriterT String (StateT Grid (ReaderT Env IO)) a
+type App a = WriterT String (StateT (Grid, Coor, PrevVal) (ReaderT Env IO)) a
 
 -- Prelude> r = (\d -> fmap (\x-> fmap (\y -> y+d) x ) )
 ---- each quadrant is a 2D grid
@@ -59,12 +63,61 @@ type App a = WriterT String (StateT Grid (ReaderT Env IO)) a
 -- testGrid :: Grid
 -- testGrid = [[Nothing,Just 3,Just 4,Nothing],[Just 4,Nothing,Nothing,Just 2],[Just 1,Nothing,Nothing,Just 3],[Nothing,Just 2,Just 1,Nothing]]
 
+test:: [Int] -> String
+test s =
+           let f = (1+) in
+            case s of
+             [] -> ""
+             (x:xs) -> show (f x) ++ "--" ++ test (drop 1 s)
+          --  test $ drop 1 s
+
 runApp :: App ()
 runApp = do
-           x <- lift $ lift ask
-        --    let y = print x 
-        --    z <-  lift $ lift y
-           return ()
+           (lxs, coor,_) <- lift get
+           case coor of
+              [] -> return () -- Stop recursion
+              (locxy:locxs) -> do
+                        let (x,y) = locxy
+                            g = getInts <$> lxs
+                            gT = getTranspose g
+                            qMap = generateQuad 4 2
+                            getQs = getQuadrant g (qMap !! x !! y)
+                            possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
+                            predElems = if length possibleElems == 3 then getPossibleElems  (head possibleElems) (possibleElems !! 1) (possibleElems !! 2)
+                                                               else []
+                            -- (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
+                            eLoc@(Loc e xs) = lxs !! x !! y
+                            prevVal = (e, (x,y)) in
+                          if e == 0 && length predElems > 1
+                            then
+                              lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e [predElems]) y ) x, coor, prevVal)
+                            else
+                              if e == 0 && length predElems == 1
+                                then
+                                  lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc (head predElems) []) y ) x, coor, prevVal)
+                                else
+                                  lift $ put (lxs, coor, prevVal)
+                                  -- tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e
+                                      -- lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) x, coor)
+
+                        (lxs', coor', prev) <- lift get
+                        let (x,y) = head coor'
+                            eLoc@(Loc e xs) = lxs' !! x !! y
+                            (prevVal, (prevX, prevY)) = prev
+                            in
+                          if prevVal == 0 && prevVal /= e
+                            then
+                              tell $ "Found value for the location - (" ++ show x ++", "++ show y ++ "), new Value = " ++ show e
+                            else
+                              if e == 0 && (length xs > 1) then
+                                tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs
+                              else
+                                tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e
+
+                        lift $ put (lxs', drop 1 coor', prev) -- move to next location
+
+                        runApp -- iterate again
+
 
 -- Infinte list of random numbers within a range
 -- *Main> t = randGen' (1,4) 23 -- '23' is the seed
@@ -72,8 +125,8 @@ runApp = do
 -- [3,1,1,1,4,2,2,3,3,4,1,3,2,4,4,3]
 
 
-appWithoutWriter :: StateT Grid (ReaderT Env IO) ((), String)
-appWithoutWriter = runWriterT runApp
+-- appWithoutWriter :: StateT Grid (ReaderT Env IO) ((), String)
+-- appWithoutWriter = runWriterT runApp
 
 -- appWithoutState :: ReaderT Env IO (((), String), Grid)
 -- appWithoutState = runStateT appWithoutWriter testGrid
