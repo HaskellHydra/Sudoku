@@ -273,3 +273,14 @@ main = do
          parseFile $ head args
 -- Real world usage of uncurry
 -- main = cli >>= (uncurry animate)
+
+-- ASCII sudoku art
+-- .---------------.
+-- | 2 | 3 | 1 | 4 |
+-- *---------------*
+-- | 1 | 4 | 2 | 3 |
+-- *---------------*
+-- | 3 | 2 | 4 | 1 |
+-- *---------------*
+-- | 4 | 1 | 3 | 2 |
+-- *---------------*
