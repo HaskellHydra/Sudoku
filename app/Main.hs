@@ -187,6 +187,13 @@ findMissingElems xs = filter (/= 0) $ (\ys -> foldr ((:) . (\x -> if x `notElem`
 getPossibleElems :: [Int] -> [Int] ->[Int] ->[Int]
 getPossibleElems ys1 ys2 ys3 = filter (/= 0) $ foldr ((:) . (\x -> if x `elem` ys1 && x `elem` ys2 && x `elem` ys3 then x else 0 )) [] [1..4]
 
+replaceLocElem :: [Locx] -> Locx -> Int -> [Locx]
+replaceLocElem [] _ _ = []
+replaceLocElem xs eLoc@(Loc e _) pos
+  | (pos < 0) || (pos >= length xs) || ( e > 4) || (e < 1)  = xs
+  | otherwise = take pos xs ++ (eLoc : drop (pos+1) xs)
+
+
 -- TODO: Create list of possible values 
 -- getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
 -- getPossibleValues (x,y) lxs = let g = getInts <$> lxs
