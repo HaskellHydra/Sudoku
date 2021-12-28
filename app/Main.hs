@@ -5,6 +5,8 @@ import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import System.Environment
+import Control.Monad.IO.Class
+import Control.Monad
 -- import System.Random
 -- import Text.Regex.TDFA
 import qualified Text.Read as R
@@ -80,54 +82,18 @@ runApp = do
            (lxs, coor, prevInit, solved) <- lift get
            case coor of
               [] -> do
-                let check = length $ concat (getPredictions <$> lxs) in
-                  lift $ put (lxs, (,) <$> [0..3] <*> [0..3], prevInit, check== 0)
-                
+                checkIfSolved
                 (_, _, _, solved) <- lift get
-                if (solved == True ) then
-                  return ()
-                else
-                  runApp -- If it is not yet solved rerun the App and reset all the co ordinates
+                unless solved            -- If solved return else runApp. Then enxt statement 'runApp' is controlled by unless
+                  runApp                 -- If it is not yet solved rerun the App and reset all the co ordinates
 
               (locxy:locxs) -> do
-                        let (x,y) = locxy
-                            g = getInts <$> lxs
-                            gT = getTranspose g
-                            qMap = generateQuad 4 2
-                            getQs = getQuadrant g (qMap !! x !! y)
-                            possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
-                            predElems = if length possibleElems == 3 then getPossibleElems  (head possibleElems) (possibleElems !! 1) (possibleElems !! 2)
-                                                               else []
-                            -- (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
-                            eLoc@(Loc e xs) = lxs !! x !! y
-                            prevVal = (e, (x,y)) in
-                          if e == 0 && length predElems > 1
-                            then
-                              lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e [predElems]) y ) x, coor, prevVal, False)
-                            else
-                              if e == 0 && length predElems == 1
-                                then
-                                  lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc (head predElems) []) y ) x, coor, prevVal, False)
-                                else
-                                  lift $ put (lxs, coor, prevVal, False)
-                                  -- tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e
-                                      -- lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) x, coor)
 
-                        (lxs', coor', prev,_) <- lift get
-                        let (x,y) = head coor'
-                            eLoc@(Loc e xs) = lxs' !! x !! y
-                            (prevVal, (prevX, prevY)) = prev
-                            in
-                          if prevVal == 0 && prevVal /= e
-                            then
-                              tell $ "Found value for the location - (" ++ show x ++", "++ show y ++ "), new Value = " ++ show e ++ "\n"
-                            else
-                              if (e == 0) && (length (head xs) > 1) then
-                                tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs++ "\n"
-                              else
-                                tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e++ "\n"
+                        getPossibleValues -- the current App state, env, writer will be passed to the getPossibleValues App function
+                        writeIterLog
 
-                        lift $ put (lxs', drop 1 coor', prev, False) -- move to next location
+                        (lxs', coor', prev, _) <- lift get
+                        lift $ put (lxs', drop 1 coor', prev, False) -- move to next location, pop the head of coor
 
                         runApp -- iterate again
 
@@ -135,6 +101,64 @@ runApp = do
 -- *Main> t = randGen' (1,4) 23 -- '23' is the seed
 -- *Main> take 16 t
 -- [3,1,1,1,4,2,2,3,3,4,1,3,2,4,4,3]
+
+checkIfSolved:: App()
+checkIfSolved = do
+                  (lxs, coor, prevInit, solved) <- lift get
+                  let check = length $ concat (getPredictions <$> lxs) in
+                    lift $ put (lxs, (,) <$> [0..3] <*> [0..3], prevInit, check== 0)
+
+                  return ()
+
+writeIterLog :: App()
+writeIterLog = do
+                 (lxs', coor', prev, _) <- lift get
+                 let (x,y) = head coor'
+                     eLoc@(Loc e xs) = lxs' !! x !! y
+                     (prevVal, (prevX, prevY)) = prev
+                     in
+                   if prevVal == 0 && prevVal /= e
+                     then
+                       tell $ "Found value for the location - (" ++ show x ++", "++ show y ++ "), new Value = " ++ show e ++ "\n"
+                     else
+                       if (e == 0) && (length (head xs) > 1) then
+                         tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs++ "\n"
+                       else
+                         tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e++ "\n"
+
+                 return ()
+
+-- get the list of possible values for each (x,y) location in the grid
+-- We always pop the head of the coor list we dont need to pass the (x,y) locations
+getPossibleValues :: App ()
+getPossibleValues = do
+                        (lxs, coor, prevInit, solved) <- lift get
+                        liftIO $ putStrLn $ "Solving for location - " ++ (\(x,y) -> "("++show x++","++ show y++")") (head coor)
+                        let (x,y) = head coor
+                            g = getInts <$> lxs
+                            gT = getTranspose g
+                            qMap = generateQuad 4 2
+                            getQs = getQuadrant g (qMap !! x !! y)
+                            possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
+                            predElems = if length possibleElems == 3
+                                          then
+                                            getPossibleElems  (head possibleElems) (possibleElems !! 1) (possibleElems !! 2)
+                                           else []
+                            -- (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
+                            eLoc@(Loc e xs) = lxs !! x !! y
+                            prevVal = (e, (x,y)) in
+
+                          if e == 0 && length predElems > 1
+                            then
+                              lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e [predElems]) y ) x, coor, prevVal, False)
+                          else
+                            if e == 0 && length predElems == 1
+                              then
+                                lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc (head predElems) []) y ) x, coor, prevVal, False)
+                              else
+                                lift $ put (lxs, coor, prevVal, False)
+
+                        return  ()
 
 appWithoutWriter :: StateT (Grid, Coor, PrevVal, Bool) (ReaderT Env IO) ((), String)
 appWithoutWriter = runWriterT runApp
@@ -270,18 +294,18 @@ replaceLocList lxs xs pos = let d = zip [0..(length lxs - 1)] lxs in
 
 
 -- Create list of possible values (test function) 
-getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
-getPossibleValues (x,y) lxs = let g = getInts <$> lxs
-                                  gT = getTranspose g
-                                  qMap = generateQuad 4 2
-                                  getQs = getQuadrant g (qMap !! x !! y)
-                                  possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
-                                 --  possibleElems = getPossibleElems (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
-                                  eLoc@(Loc e xs) = lxs !! x !! y in
-                              if e == 0 then
-                                replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) x
-                              else
-                                 lxs
+-- getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
+-- getPossibleValues (x,y) lxs = let g = getInts <$> lxs
+--                                   gT = getTranspose g
+--                                   qMap = generateQuad 4 2
+--                                   getQs = getQuadrant g (qMap !! x !! y)
+--                                   possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
+--                                  --  possibleElems = getPossibleElems (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
+--                                   eLoc@(Loc e xs) = lxs !! x !! y in
+--                               if e == 0 then
+--                                 replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) x
+--                               else
+--                                  lxs
 
 -- Apply zip to combine idx for values
 -- *Main> d = zip [1..4] $ (3*) <$> [1..4]
