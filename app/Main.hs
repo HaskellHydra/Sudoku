@@ -31,6 +31,7 @@ type Coor = [(Int, Int)]
 
 type PrevVal = (Int, (Int, Int))
 
+type Solved = Bool
 -- A grid is a group of 2D quadrants 
 -- type Grid = [[[[Maybe Int]]]]
 
@@ -38,7 +39,7 @@ type PrevVal = (Int, (Int, Int))
 -- Whatever changes in a app will belong to the State
 type Location = Maybe Vector
 
-type App a = WriterT String (StateT (Grid, Coor, PrevVal) (ReaderT Env IO)) a
+type App a = WriterT String (StateT (Grid, Coor, PrevVal, Solved) (ReaderT Env IO)) a
 
 -- Prelude> r = (\d -> fmap (\x-> fmap (\y -> y+d) x ) )
 ---- each quadrant is a 2D grid
@@ -61,11 +62,10 @@ type App a = WriterT String (StateT (Grid, Coor, PrevVal) (ReaderT Env IO)) a
 -- (((),""),[[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]])
 
 testGrid :: Grid
-testGrid = [[Loc 0 [[2,3]],Loc 3 [],Loc 4 [],Loc 0 [[1,2]]],[Loc 1 [],Loc 4 [],Loc 0 [[2,3]],Loc 2 []],[Loc 0 [[3,4]],Loc 2 [],Loc 1 [],Loc 4 []],[Loc 4 [],Loc 1 [],Loc 2 [],Loc 3 []]]
-  
-  -- convStr2Arr  ["_,_,4,_","1,_,_,_","_,2,_,_","_,_,_,3"] -- difficult
+-- testGrid = [[Loc 0 [[2,3]],Loc 3 [],Loc 4 [],Loc 0 [[1,2]]],[Loc 1 [],Loc 4 [],Loc 0 [[2,3]],Loc 2 []],[Loc 0 [[3,4]],Loc 2 [],Loc 1 [],Loc 4 []],[Loc 4 [],Loc 1 [],Loc 2 [],Loc 3 []]]
+testGrid = convStr2Arr  ["_,_,4,_","1,_,_,_","_,2,_,_","_,_,_,3"] -- difficult
   -- convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] -- easy
-  
+
   -- [[Loc 0 [],Loc 3 [],Loc 4 [],Loc 0 []],[Loc 4 [],Loc 0 [],Loc 0 [],Loc 2 []],[Loc 1 [],Loc 0 [],Loc 0 [],Loc 3 []],[Loc 0 [],Loc 2 [],Loc 1 [],Loc 0 []]]
 
 test:: [Int] -> String
@@ -78,9 +78,18 @@ test s =
 
 runApp :: App ()
 runApp = do
-           (lxs, coor,_) <- lift get
+           (lxs, coor, prevInit, solved) <- lift get
            case coor of
-              [] -> return () -- Stop recursion
+              [] -> do
+                let check = length $ concat (getPredictions <$> lxs) in
+                  lift $ put (lxs, (,) <$> [0..3] <*> [0..3], prevInit, check== 0)
+                
+                (_, _, _, solved) <- lift get
+                if (solved == True ) then
+                  return ()
+                else
+                  runApp -- If it is not yet solved rerun the App and reset all the co ordinates
+
               (locxy:locxs) -> do
                         let (x,y) = locxy
                             g = getInts <$> lxs
@@ -95,51 +104,48 @@ runApp = do
                             prevVal = (e, (x,y)) in
                           if e == 0 && length predElems > 1
                             then
-                              lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e [predElems]) y ) x, coor, prevVal)
+                              lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e [predElems]) y ) x, coor, prevVal, False)
                             else
                               if e == 0 && length predElems == 1
                                 then
-                                  lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc (head predElems) []) y ) x, coor, prevVal)
+                                  lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc (head predElems) []) y ) x, coor, prevVal, False)
                                 else
-                                  lift $ put (lxs, coor, prevVal)
+                                  lift $ put (lxs, coor, prevVal, False)
                                   -- tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e
                                       -- lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) x, coor)
 
-                        (lxs', coor', prev) <- lift get
+                        (lxs', coor', prev,_) <- lift get
                         let (x,y) = head coor'
                             eLoc@(Loc e xs) = lxs' !! x !! y
                             (prevVal, (prevX, prevY)) = prev
                             in
                           if prevVal == 0 && prevVal /= e
                             then
-                              tell $ "Found value for the location - (" ++ show x ++", "++ show y ++ "), new Value = " ++ show e
+                              tell $ "Found value for the location - (" ++ show x ++", "++ show y ++ "), new Value = " ++ show e ++ "\n"
                             else
-                              if e == 0 && (length xs > 1) then
-                                tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs
+                              if (e == 0) && (length (head xs) > 1) then
+                                tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs++ "\n"
                               else
-                                tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e
+                                tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e++ "\n"
 
-                        lift $ put (lxs', drop 1 coor', prev) -- move to next location
+                        lift $ put (lxs', drop 1 coor', prev, False) -- move to next location
 
                         runApp -- iterate again
-
 
 -- Infinte list of random numbers within a range
 -- *Main> t = randGen' (1,4) 23 -- '23' is the seed
 -- *Main> take 16 t
 -- [3,1,1,1,4,2,2,3,3,4,1,3,2,4,4,3]
 
-
-appWithoutWriter :: StateT (Grid, Coor, PrevVal) (ReaderT Env IO) ((), String)
+appWithoutWriter :: StateT (Grid, Coor, PrevVal, Bool) (ReaderT Env IO) ((), String)
 appWithoutWriter = runWriterT runApp
 
-appWithoutState :: ReaderT Env IO (((), String), (Grid, Coor, PrevVal))
-appWithoutState = let coor = (,) <$> [0..3] <*> [0..3] in 
-                    runStateT appWithoutWriter (testGrid, coor, (0,(0,0))) -- initial prevVal will be overwritten in the 1st run
+appWithoutState :: ReaderT Env IO (((), String), (Grid, Coor, PrevVal, Bool))
+appWithoutState = let coor = (,) <$> [0..3] <*> [0..3] in
+                    runStateT appWithoutWriter (testGrid, coor, (0,(0,0)), False) -- initial prevVal will be overwritten in the 1st run
 
-appWithoutReader :: IO (((), String), (Grid, Coor, PrevVal))
+appWithoutReader :: IO (((), String), (Grid, Coor, PrevVal, Bool))
 appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
-
 
 -- pack will convert String to Text
 -- Prelude Data.Text> :t splitOn 
@@ -187,6 +193,12 @@ tsplit s = (\x -> if x == "_" then Loc 0 [] else Loc (R.read x::Int) [] ) . T.un
 -- convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
 convStr2Arr :: [String] -> [[Locx]]
 convStr2Arr  = fmap tsplit
+
+getPredictions :: [Locx] -> [Int]
+getPredictions lxs = do
+                       Loc _ xs <- lxs
+                       foldr (:) [] (concat xs)
+
 
 -- apply getInts <$> grid to get the whole grid ---> [[Int]]
 getInts:: [Locx] -> [Int] -- get only the values 
