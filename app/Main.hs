@@ -7,75 +7,48 @@ import Control.Monad.Trans.Class (lift)
 import System.Environment
 import Control.Monad.IO.Class
 import Control.Monad
--- import System.Random
--- import Text.Regex.TDFA
 import qualified Text.Read as R
 import qualified Data.Text as T
 import Data.Maybe (Maybe(Nothing))
+
+-- The entire puzzle is stored as list of rows.
+-- Each row is a list of 4 numbers
+-- .---------------.
+-- | 2 | 3 | 1 | 4 | ---> R1
+-- *---------------* 
+-- | 1 | 4 | 2 | 3 | ---> R2
+-- *---------------* 
+-- | 3 | 2 | 4 | 1 | ---> R3
+-- *---------------* 
+-- | 4 | 1 | 3 | 2 | ---> R4
+-- *---------------*
 
 -- Dimension of the puzzle. This is used for Puzzle Env
 data Env = Env {dim :: [Int], quad :: [Int], n_x :: Int, n_y ::Int }
                 deriving Show
 
--- (x,y) determine the position
--- 'z' determines the value in the location
-type Vector = (Int, Int, Maybe Int)
-
 data Loc a b = Loc a b
            deriving Show
 
+-- Each location is a value and a list of possible values
 type Locx = Loc Int [[Int]]
--- each quadrant is a 2D grid
+
+-- Grid will hold the entire puzzle
 type Grid = [[Locx]]
 
+-- This list will contain the caterisian co-ordinates for the possible locations
+-- (0,0) -> (3,3) since we are focused only on 4x4 sudoku puzzle
 type Coor = [(Int, Int)]
 
+-- This type will store the previous value of a location and the co-ordinates
+--  of the location
 type PrevVal = (Int, (Int, Int))
 
+-- This type is a flag to indicate if the puzzle has been solved
 type Solved = Bool
--- A grid is a group of 2D quadrants 
--- type Grid = [[[[Maybe Int]]]]
 
--- List of Locations will hold the current state of the puzzle
--- Whatever changes in a app will belong to the State
-type Location = Maybe Vector
-
+-- The stack for computation
 type App a = WriterT String (StateT (Grid, Coor, PrevVal, Solved) (ReaderT Env IO)) a
-
--- Prelude> r = (\d -> fmap (\x-> fmap (\y -> y+d) x ) )
----- each quadrant is a 2D grid
-
-
--- t = randGen' (1,4) 23
--- p1 = [take 4 t, take 4 $ drop 4 t]
--- p2 = [take 4 $ drop 8 t, take 4 $ drop 12 t]
--- p3 = [take 4 $ drop 16 t, take 4 $ drop 20 t]
--- p4 = [take 4 $ drop 24 t, take 4 $ drop 28 t]
--- q1 = fmap (fmap Just) p1
--- q2 = fmap (fmap Just) p2
--- q3 = fmap (fmap Just) p3
--- q4 = fmap (fmap Just) p4
--- grid = [[q1,q2],[q3,q4]]
--- randGen' :: (Int, Int) -> Int -> [Int]
--- randGen' (x,y) p | (n,_) <- uniformR (x, y) $ mkStdGen $ 137 + p = n : randGen' (x,y) ( 2 * p)
--- Output
--- runReaderT (runStateT (runWriterT runApp) [[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]] )  (Env [4,4] [2,2])
--- (((),""),[[[[Just 3,Just 1,Just 1,Just 1],[Just 4,Just 2,Just 2,Just 3]],[[Just 3,Just 4,Just 1,Just 3],[Just 2,Just 4,Just 4,Just 3]]],[[[Just 3,Just 1,Just 2,Just 4],[Just 4,Just 2,Just 1,Just 1]],[[Just 4,Just 2,Just 2,Just 2],[Just 2,Just 3,Just 4,Just 2]]]])
-
-testGrid :: Grid
--- testGrid = [[Loc 0 [[2,3]],Loc 3 [],Loc 4 [],Loc 0 [[1,2]]],[Loc 1 [],Loc 4 [],Loc 0 [[2,3]],Loc 2 []],[Loc 0 [[3,4]],Loc 2 [],Loc 1 [],Loc 4 []],[Loc 4 [],Loc 1 [],Loc 2 [],Loc 3 []]]
-testGrid = convStr2Arr  ["_,_,4,_","1,_,_,_","_,2,_,_","_,_,_,3"] -- difficult
--- testGrid = convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] -- easy
-
-  -- [[Loc 0 [],Loc 3 [],Loc 4 [],Loc 0 []],[Loc 4 [],Loc 0 [],Loc 0 [],Loc 2 []],[Loc 1 [],Loc 0 [],Loc 0 [],Loc 3 []],[Loc 0 [],Loc 2 [],Loc 1 [],Loc 0 []]]
-
-test:: [Int] -> String
-test s =
-           let f = (1+) in
-            case s of
-             [] -> ""
-             (x:xs) -> show (f x) ++ "--" ++ test (drop 1 s)
-          --  test $ drop 1 s
 
 runApp :: App ()
 runApp = do
@@ -96,11 +69,6 @@ runApp = do
                         lift $ put (lxs', drop 1 coor', prev, False) -- move to next location, pop the head of coor
 
                         runApp -- iterate again
-
--- Infinte list of random numbers within a range
--- *Main> t = randGen' (1,4) 23 -- '23' is the seed
--- *Main> take 16 t
--- [3,1,1,1,4,2,2,3,3,4,1,3,2,4,4,3]
 
 checkIfSolved:: App()
 checkIfSolved = do
@@ -160,6 +128,13 @@ getPossibleValues = do
 
                         return  ()
 
+-- ==========================================================================
+-- For Manual testing
+testGrid :: Grid
+testGrid = convStr2Arr  ["_,_,4,_","1,_,_,_","_,2,_,_","_,_,_,3"] -- difficult
+-- testGrid = convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] -- easy
+  -- [[Loc 0 [],Loc 3 [],Loc 4 [],Loc 0 []],[Loc 4 [],Loc 0 [],Loc 0 [],Loc 2 []],[Loc 1 [],Loc 0 [],Loc 0 [],Loc 3 []],[Loc 0 [],Loc 2 [],Loc 1 [],Loc 0 []]]
+
 appWithoutWriter :: StateT (Grid, Coor, PrevVal, Bool) (ReaderT Env IO) ((), String)
 appWithoutWriter = runWriterT runApp
 
@@ -169,6 +144,9 @@ appWithoutState = let coor = (,) <$> [0..3] <*> [0..3] in
 
 appWithoutReader :: IO (((), String), (Grid, Coor, PrevVal, Bool))
 appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
+
+-- ==========================================================================
+
 
 -- pack will convert String to Text
 -- Prelude Data.Text> :t splitOn 
@@ -198,58 +176,118 @@ parseFile path = do
 --                   else
 --                     (Nothing, Nothing)
 
-tsplit :: String -> [Loc Int [[Int]]]
-tsplit s = (\x -> if x == "_" then Loc 0 [] else Loc (R.read x::Int) [] ) . T.unpack <$> T.splitOn ( T.pack "," ) (T.pack s)
+-- TODO: Mover helper functions into a new file
+-- *** Start Helper functions ***
+
+-- Helper function to convert string to [Locx]
+-- *Main> tsplit "_,3,_,4,_"
+-- [Loc 0 [],Loc 3 [],Loc 0 [],Loc 4 [],Loc 0 []]
+str2Locx :: String -> [Locx]
+str2Locx s = (\x -> if x == "_" then Loc 0 [] else Loc (R.read x::Int) [] ) . T.unpack <$> T.splitOn ( T.pack "," ) (T.pack s)
 -- Functor Law g <$> f <$> ~ g . f <$>
 
+-- Helper function to convert list of strings to 'list' of 'Locx'
 -- convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
 convStr2Arr :: [String] -> [[Locx]]
-convStr2Arr  = fmap tsplit
+convStr2Arr  = fmap str2Locx
 
+-- Helper function to extract the list of possible values from list of Locx
+-- *Main> g = [Loc 0 [[4,3]],Loc 3 [],Loc 0 [],Loc 4 [],Loc (0::Int) ([[1,2]]::[[Int]])]
+-- *Main> getPredictions g
+-- [4,3,1,2]
 getPredictions :: [Locx] -> [Int]
 getPredictions lxs = do
                        Loc _ xs <- lxs
                        foldr (:) [] (concat xs)
 
 
+-- Helper function to extract the value for a given location
+-- *Main> g
+-- [Loc 0 [[4,3]],Loc 3 [],Loc 0 [],Loc 4 [],Loc 0 [[1,2]]]
+-- *Main> getInts g
+-- [0,3,0,4,0]
 -- apply getInts <$> grid to get the whole grid ---> [[Int]]
-getInts:: [Locx] -> [Int] -- get only the values 
+getInts:: [Locx] -> [Int] 
 getInts lxs = do
                 Loc x _ <- lxs
                 foldr (:) [] [x]
 
+-- .---------------.
+-- | 2 | 3 | 1 | 4 | ---> R1
+-- *---------------* 
+-- | 1 | 4 | 2 | 3 | ---> R2
+-- *---------------* 
+-- | 3 | 2 | 4 | 1 | ---> R3
+-- *---------------* 
+-- | 4 | 1 | 3 | 2 | ---> R4
+-- *---------------*
+
+-- .---------.
+-- | p1 | p2 |   
+-- *----------   The entier puzzle can be thought 4 quadrants.
+-- | p3 | p4 |   Each quadrant is a 2x2 matrix since it is 4x4 puzzle  
+-- *---------*
+-- Since the puzzle is stored as list of rows to extract the numbers in a
+--  quadrant we need 2 rows. 
+-- In the above example p1 = [2,3,1,4]
+--                      p2 = [1,4,2,3]
+-- getQuad will take R1, R2 and generate the quadrants p1,p2
 
 getQuad :: [Int] -> [Int] -> Int -> ([Int], [Int])
 getQuad x1 x2 n = let p1 = tList x1 n
                       p2 = tList x2 n in
                   repLists (p1,p2)
 
+-- Helper function to split a even numbered list into list of lists depending on 
+--  divison parameter
+-- *Main> tList [1..4] 2
+-- [[1,2],[3,4]]
 tList :: [Int] -> Int -> [[Int]]
 tList [] _ = []
 tList xs d = take d xs : tList (drop d xs) d
 
+-- repLists is a helper function to getQuad
+-- This will swap the 2nd element in the 1st list with the 1st element in the 2nd list
+-- *Main> t1 = tList [1..4] 2
+-- [[1,2],[3,4]]
+-- *Main> t2 = tList [5..8] 2
+-- [[5,6],[7,8]]
+-- *Main> repLists (t1,t2)
+-- ([1,2,5,6],[3,4,7,8])
 repLists :: ([[Int]], [[Int]]) -> ([Int], [Int])
 repLists p | (x1,x2) <- p = let p1 = head (take 1 x1)
                                 p2 = head (take 1 $ drop 1 x1)  in
                                 ( concat (p1:take 1 x2) , concat (p2: take 1 (drop 1 x2)) )
 
+-- Helper function to transpose the matrix
 getTranspose :: [[Int]] ->  [[Int]]
 getTranspose [[],[],[],[]] = []
 getTranspose [ p1:p1s, p2:p2s , p3:p3s , p4:p4s] = [p1, p2, p3, p4] : getTranspose [p1s,p2s,p3s,p4s]
 
 
-checkElem :: Maybe Int -> [Maybe Int] -> Bool
-checkElem elem xs =  or $ (== elem) <$> xs
-
 generateSeq :: Int -> Int -> [[Int]]
 generateSeq x dim = replicate dim x : generateSeq (x+1) dim
 
+
+-- .---------------. 
+-- | 1 | 1 | 2 | 2 |
+-- *---------------* 
+-- | 1 | 1 | 2 | 2 |
+-- *---------------* 
+-- | 3 | 3 | 4 | 4 |
+-- *---------------* 
+-- | 3 | 3 | 4 | 4 |
+-- *---------------*
+-- generateQuad is used to generate a quadrant map
+-- this is used to identify the quadrant for a given location
 generateQuad :: Int -> Int -> [[Int]]
 generateQuad dim quad = let q = take dim $ generateSeq 1 dim
                             (p1,p2) = repLists ( tList (head q) quad, tList (q!!1) quad )
                             (p3,p4) = repLists (tList (q!!2) quad, tList (q!!3) quad)  in
                         [p1,p2,p3,p4]
 
+-- This is wrapper for getting the quadrants from the grid.
+-- Only the location values in the grid are supplied to the below function 
 getQuadrant :: [[Int]] -> Int -> [Int]
 getQuadrant lxs q =
                   let (q1, q2) = repLists ( tList (head $ take 1 lxs) 2, tList (head $ take 1 $ drop 1 lxs) 2)
@@ -261,13 +299,23 @@ getQuadrant lxs q =
                     4 -> q4
                     _ -> []
 
-
+-- Helper function to find the missing numbers between 1-4 in a given list
+-- *Main> findMissingElems [2,3,0,0]
+-- [1,4]
 findMissingElems :: [Int] -> [Int]
 findMissingElems xs = filter (/= 0) $ (\ys -> foldr ((:) . (\x -> if x `notElem` ys then x else 0 )) [] [1..4] ) xs
 
+-- This is the core function in solving the puzzle
+-- This function will take a list of possible elements in a row, 
+--                           list of possible elements along the column 
+--                           list of possible elements in a quadrant 
+-- And it will find the list of common values
+-- If there is only one number it will be the missing value for the location
+--  If not we need to run another iteration
 getPossibleElems :: [Int] -> [Int] ->[Int] ->[Int]
 getPossibleElems ys1 ys2 ys3 = filter (/= 0) $ foldr ((:) . (\x -> if x `elem` ys1 && x `elem` ys2 && x `elem` ys3 then x else 0 )) [] [1..4]
 
+-- Helper function to replace a Locx with a given Locx in a [Locx]
 -- The below case will take care of all the pattern matching
 -- Combine idx with the value in the list to form a [(idx, x)]
 replaceLocElem :: [Locx] -> Locx -> Int -> [Locx]
@@ -281,6 +329,7 @@ replaceLocElem xs eLoc@(Loc e _) pos = let d = zip [0..(length xs - 1)] xs in
 --   | pos < 0 || pos >= length xs   = xs
 --   | otherwise = take pos xs ++ (eLoc : drop (pos+1) xs)
 
+-- Helper function to replace a [Locx] with a given [Locx] in a [[Locx]]
 replaceLocList :: [[Locx]] -> [Locx] -> Int -> [[Locx]]
 replaceLocList lxs xs pos = let d = zip [0..(length lxs - 1)] lxs in
                                        (\(x,y)-> if x == pos then xs else y ) <$> foldr (:) [] d
@@ -293,58 +342,10 @@ replaceLocList lxs xs pos = let d = zip [0..(length lxs - 1)] lxs in
 --   | otherwise = take pos lxs ++ (xs : drop (pos+1) lxs)
 
 
--- Create list of possible values (test function) 
--- getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
--- getPossibleValues (x,y) lxs = let g = getInts <$> lxs
---                                   gT = getTranspose g
---                                   qMap = generateQuad 4 2
---                                   getQs = getQuadrant g (qMap !! x !! y)
---                                   possibleElems = [findMissingElems $ g !! x, findMissingElems $ gT !! y, findMissingElems getQs]
---                                  --  possibleElems = getPossibleElems (findMissingElems $ g !! x) (findMissingElems $ gT !! y) (findMissingElems getQs) 
---                                   eLoc@(Loc e xs) = lxs !! x !! y in
---                               if e == 0 then
---                                 replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e possibleElems) y ) x
---                               else
---                                  lxs
-
--- Apply zip to combine idx for values
--- *Main> d = zip [1..4] $ (3*) <$> [1..4]
--- [(1,3),(2,6),(3,9),(4,12)]
--- Apply 'foldr' with fmap to modify the values
--- (\(x,y)-> x+ y) <$>foldr (:) [] d
--- [4,8,12,16]
--- Replace a specific element in the list
--- *Main> (\(x,y)-> if(x ==2) then y*3 else y ) <$>foldr (:) [] d
--- [3,18,9,12]
-
-
-
--- (,) <$> [0..3] <*> [0..3]
--- computeGrid :: (Int, Int) -> [[Int]] -> [Int] 
--- computeGrid (x,y) grid = case (grid !! x) !! y of
---                           Just n -> [n]
---                           Nothing -> []
-
-
--- convStr2VD :: [String] -> Maybe Env
--- convStr2VD (x:xs) =
---                   let dimRegex = "^DIM=[0-9]+x[0-9]+$" 
---                       quadRegex = "^QUAD=[0-9]+x[0-9]+$" 
---                   in
---                   if (x =~ dimRegex :: Bool) then
---                     let f = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack x) !! 1)
---                         dim =  fmap ((\x -> read x::Int ) . T.unpack) f in
---                         Just $ Env {dim = dim, quad =[]}
---                   else
---                     Nothing
-
--- sum [1,2,3] = foldr (+) 0 [1,2,3]
--- [1,2,3] === 1:(2:(3:[]))
--- [1,2,3] === 1+(2+(3:+0))
-
 printArgs:: [String] -> IO ()
 printArgs = foldr ((>>) . putStrLn) (putStrLn "")
 
+-- *** End Helper functions ***
 
 cli :: IO [String]
 cli = getArgs
