@@ -10,7 +10,6 @@ import System.Environment
 import qualified Text.Read as R
 import qualified Data.Text as T
 import Data.Maybe (Maybe(Nothing))
-import Data.Bifunctor
 
 -- Dimension of the puzzle. This is used for Puzzle Env
 data Env = Env {dim :: [Int], quad :: [Int], n_x :: Int, n_y ::Int }
@@ -64,7 +63,7 @@ type App a = WriterT String (StateT (Grid, Coor, PrevVal, Solved) (ReaderT Env I
 testGrid :: Grid
 -- testGrid = [[Loc 0 [[2,3]],Loc 3 [],Loc 4 [],Loc 0 [[1,2]]],[Loc 1 [],Loc 4 [],Loc 0 [[2,3]],Loc 2 []],[Loc 0 [[3,4]],Loc 2 [],Loc 1 [],Loc 4 []],[Loc 4 [],Loc 1 [],Loc 2 [],Loc 3 []]]
 testGrid = convStr2Arr  ["_,_,4,_","1,_,_,_","_,2,_,_","_,_,_,3"] -- difficult
-  -- convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] -- easy
+-- testGrid = convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] -- easy
 
   -- [[Loc 0 [],Loc 3 [],Loc 4 [],Loc 0 []],[Loc 4 [],Loc 0 [],Loc 0 [],Loc 2 []],[Loc 1 [],Loc 0 [],Loc 0 [],Loc 3 []],[Loc 0 [],Loc 2 [],Loc 1 [],Loc 0 []]]
 
@@ -157,17 +156,6 @@ parseFile path = do
                    let str = T.splitOn (T.pack "\n") (T.pack s)
                        cleanStr = take (length s - 1)  s in
                     print $ T.splitOn (T.pack "\n") (T.pack cleanStr)
-
--- Drop last element in the list 
-  -- take ((length s) - 1)  s
--- convStr2VD :: [String] -> (Grid, Env)
-
-
--- TODO :: WIP use the below function as refernce and use the appWithout... functions to initialize and run the app 
--- convStr2VD :: [String] -> App ()
--- convStr2VD (x:xs) = do 
---                       x <- lift $ lift ask
---                       y <- 
 
 -- TODO: Create a function to convert the ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] to proper 'Grid' type
 -- s = ["DIM=4x4","QUAD=2x2","_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
@@ -281,7 +269,7 @@ replaceLocList lxs xs pos = let d = zip [0..(length lxs - 1)] lxs in
 --   | otherwise = take pos lxs ++ (xs : drop (pos+1) lxs)
 
 
--- TODO: Create list of possible values 
+-- Create list of possible values (test function) 
 getPossibleValues :: (Int, Int) -> [[Locx]] -> [[Locx]]
 getPossibleValues (x,y) lxs = let g = getInts <$> lxs
                                   gT = getTranspose g
