@@ -24,3 +24,5 @@ type PrevVal = (Int, (Int, Int))
 -- This type is a flag to indicate if the puzzle has been solved
 type Solved = Bool
 
+-- Used for initialization tasks
+type Init = Bool

@@ -3,6 +3,9 @@ module Sudoku.Helpers where
 import Sudoku.Types
 import qualified Text.Read as R
 import qualified Data.Text as T
+import System.Process
+import Text.Regex.TDFA
+
 
 -- *** Start Helper functions ***
 
@@ -34,7 +37,7 @@ getPredictions lxs = do
 -- *Main> getInts g
 -- [0,3,0,4,0]
 -- apply getInts <$> grid to get the whole grid ---> [[Int]]
-getInts:: [Locx] -> [Int] 
+getInts:: [Locx] -> [Int]
 getInts lxs = do
                 Loc x _ <- lxs
                 foldr (:) [] [x]
@@ -171,5 +174,59 @@ replaceLocList lxs xs pos = let d = zip [0..(length lxs - 1)] lxs in
 
 printArgs:: [String] -> IO ()
 printArgs = foldr ((>>) . putStrLn) (putStrLn "")
+
+
+clear :: IO ()
+clear = do
+          _ <- system "clear"
+          return ()
+
+-- pack will convert String to Text
+-- Prelude Data.Text> :t splitOn 
+-- splitOn :: Text -> Text -> [Text]
+-- Use "unpack" to convert back to String
+parseFile :: String -> IO [String]
+parseFile path = do
+                   s <- readFile path
+                   let str = T.splitOn (T.pack "\n") (T.pack s)
+                       cleanStr = take (length s - 1)  s in
+                      -- print cleanStr
+                      return $ T.unpack <$> T.splitOn (T.pack "\n") (T.pack cleanStr)
+
+-- s = ["DIM=4x4","QUAD=2x2","_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
+convStr2VD :: [String] -> IO (Maybe Env, Maybe Grid)
+convStr2VD (d:q:xs) =
+                  -- TODO: remove the regex redundancy 
+                  let dimRegex = "^DIM=[0-9]+x[0-9]+$"
+                      quadRegex = "^QUAD=[0-9]+x[0-9]+$"
+                      gridRegex = "^((_|[0-9]),)+([0-9]|(_))$"
+                  in
+                  if (d =~ dimRegex :: Bool) && (q =~ quadRegex :: Bool) then
+                    let fd = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack d) !! 1)
+                        fq = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack q) !! 1)
+                        dim =  fmap ((\x -> read x::Int ) . T.unpack) fd
+                        quad = fmap ((\x -> read x::Int ) . T.unpack) fq
+                        grid = convStr2Arr xs in
+
+                    if ( init (concat ((++ ",") <$> xs)) =~ gridRegex ::Bool ) then
+                      return (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Just grid)
+                    else
+                      return (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Nothing)
+
+                  else
+                    return (Nothing, Nothing)
+
+checkParser :: (Maybe Env, Maybe Grid) -> IO Bool
+checkParser z = case z of
+                  (Just env, Just grid) -> do
+                      putStrLn $ "\n\nSuccessfully parsed \nEnv = " ++ show env ++ "\nGrid = " ++ show grid ++ "\n\n"
+                      return True
+                  (Just env, Nothing) -> do
+                      putStrLn $ "\n\nParsed only the Env = " ++ show env ++ "\n\n"
+                      return False
+                  _ -> do
+                      putStrLn "\n\nparser failed!\n\n"
+                      return False
+
 
 -- *** End Helper functions ***

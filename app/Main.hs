@@ -12,10 +12,11 @@ import Control.Monad.Trans.Class (lift)
 import System.Environment
 import Control.Monad.IO.Class
 import Control.Monad
-import Text.Regex.TDFA
 import qualified Text.Read as R
 import qualified Data.Text as T
 import Data.List
+
+
 -- import Data.Maybe (Maybe(Nothing))
 
 
@@ -32,19 +33,20 @@ import Data.List
 -- *---------------*
 
 -- The stack for computation --TODO :: Create a State flag for initialization
-type App a = WriterT String (StateT (Grid, Coor, PrevVal, Solved) (ReaderT Env IO)) a
+type App a = WriterT String (StateT (Grid, Coor, PrevVal, Solved, Init) (ReaderT Env IO)) a
 
 runApp :: App ()
 runApp = do
-           (lxs, coor, prevInit, solved) <- lift get
+           initialize
+           (lxs, coor, prevInit, solved, init) <- lift get
            env@(Env dim quad n_x n_y) <- lift $ lift ask
            case coor of
               [] -> do
                 checkIfSolved
-                (_, _, _, solved) <- lift get
+                (_, _, _, solved, _) <- lift get
 
                 unless solved $
-                  tell "\n\nRunning a new iteration\n\n"
+                  tell $ "\n\n"++ concat (replicate 50 "*") ++"\n** Running a new iteration\n"++ concat (replicate 50 "*") ++ "\n"
 
                 unless solved $                      -- If solved return else runApp. Then next statement 'runApp' is controlled by unless
                   runApp                             -- If it is not yet solved rerun the App and reset all the co ordinates
@@ -54,22 +56,46 @@ runApp = do
                         getPossibleValues -- the current App state, env, writer will be passed to the getPossibleValues App function
                         writeIterLog
 
-                        (lxs', coor', prev, _) <- lift get
-                        lift $ put (lxs', drop 1 coor', prev, False) -- move to next location, pop the head of coor
+                        (lxs', coor', prev, _, _) <- lift get
+                        lift $ put (lxs', drop 1 coor', prev, False, init) -- move to next location, pop the head of coor
 
                         runApp -- iterate again
 
+initialize:: App ()
+initialize = do
+               (lxs, coor, prevInit, solved, init) <- lift get
+               env@(Env dim quad n_x n_y) <- lift $ lift ask
+
+               when init $
+                 do {
+                   liftIO clear
+                 }
+
+               when init $
+                 tell $ "\n\n"++ concat (replicate 50 "*") ++"\n** Starting Sudoku Solver\n"++ concat (replicate 50 "*") ++ "\n\n"
+
+               when init $
+                 drawPuzzle $ head dim
+
+               when init $
+                 tell $ "\n\n" ++ concat (replicate 50 "*") ++ "\n\n"
+
+
+               lift $ put (lxs, coor, prevInit, solved, False) -- move to next location, pop the head of coor
+
+
+
 checkIfSolved:: App()
 checkIfSolved = do
-                  (lxs, coor, prevInit, solved) <- lift get
+                  (lxs, coor, prevInit, solved, init) <- lift get
                   let check = length $ concat (getPredictions <$> lxs) in
-                    lift $ put (lxs, (,) <$> [0..3] <*> [0..3], prevInit, check== 0)
+                    lift $ put (lxs, (,) <$> [0..3] <*> [0..3], prevInit, check== 0, init)
 
                   return ()
 
 writeIterLog :: App()
 writeIterLog = do
-                 (lxs', coor', prev, _) <- lift get
+                 (lxs', coor', prev, _, _) <- lift get
                  env@(Env dim quad n_x n_y) <- lift $ lift ask
 
                  let (x,y) = head coor'
@@ -82,14 +108,14 @@ writeIterLog = do
                      else
                        when ((e == 0) && (length (head xs) > 1)) $
                          tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs++ "\n" -- tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e++ "\n"
-                 
+
                  -- TODO : reduce this redundancy
                  let (x,y) = head coor'
                      eLoc@(Loc e xs) = lxs' !! x !! y
                      (prevVal, (prevX, prevY)) = prev
                      in
                    when (prevVal == 0 && prevVal /= e) $
-                     drawPuzzle $ head dim                   
+                     drawPuzzle $ head dim
 
                  return ()
 
@@ -97,7 +123,7 @@ writeIterLog = do
 -- We always pop the head of the coor list we dont need to pass the (x,y) locations
 getPossibleValues :: App ()
 getPossibleValues = do
-                        (lxs, coor, prevInit, solved) <- lift get
+                        (lxs, coor, prevInit, solved, init) <- lift get
                         -- liftIO $ putStrLn $ "Solving for location - " ++ (\(x,y) -> "("++show x++","++ show y++")") (head coor)
                         let (x,y) = head coor
                             g = getInts <$> lxs
@@ -115,30 +141,31 @@ getPossibleValues = do
 
                           if e == 0 && length predElems > 1
                             then
-                              lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e [predElems]) y ) x, coor, prevVal, False)
+                              lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc e [predElems]) y ) x, coor, prevVal, False, init)
                           else
                             if e == 0 && length predElems == 1
                               then
-                                lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc (head predElems) []) y ) x, coor, prevVal, False)
+                                lift $ put (replaceLocList lxs (replaceLocElem (lxs !! x) (Loc (head predElems) []) y ) x, coor, prevVal, False, init)
                               else
-                                lift $ put (lxs, coor, prevVal, False)
+                                lift $ put (lxs, coor, prevVal, False, init)
 
                         return  ()
 
 drawPuzzle :: Int -> App ()
 drawPuzzle x = do
-               (lxs, coor, prev, _) <- lift get
-               env@(Env dim quad n_x n_y) <- lift $ lift ask 
+               (lxs, coor, prev, _, _) <- lift get
+               env@(Env dim quad n_x n_y) <- lift $ lift ask
 
                unless (x/=4)$
                  tell $ "\t\t." ++ concat (replicate 15 "-") ++ ".\n"
- 
+
                case x of
                  0 ->
                    return ()
                  _ -> do
                    tell $ "\t\t| " ++ T.unpack ( T.replace (T.pack "0") (T.pack "X") (T.pack $ concat (intersperse " | " (show <$> (getInts $ lxs!!(4-x) )  ))) ) ++ " |\n" ++ "\t\t*" ++ concat (replicate 15 "-") ++ "*\n"
                    drawPuzzle $ x - 1
+
 -- ==========================================================================
 -- For Manual testing
 testGrid :: Grid
@@ -146,78 +173,26 @@ testGrid = convStr2Arr  ["_,_,4,_","1,_,_,_","_,2,_,_","_,_,_,3"] -- difficult
 -- testGrid = convStr2Arr  ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] -- easy
   -- [[Loc 0 [],Loc 3 [],Loc 4 [],Loc 0 []],[Loc 4 [],Loc 0 [],Loc 0 [],Loc 2 []],[Loc 1 [],Loc 0 [],Loc 0 [],Loc 3 []],[Loc 0 [],Loc 2 [],Loc 1 [],Loc 0 []]]
 
-appWithoutWriter :: StateT (Grid, Coor, PrevVal, Bool) (ReaderT Env IO) ((), String)
+appWithoutWriter :: StateT (Grid, Coor, PrevVal, Bool, Bool) (ReaderT Env IO) ((), String)
 appWithoutWriter = runWriterT runApp
 
-appWithoutState :: ReaderT Env IO (((), String), (Grid, Coor, PrevVal, Bool))
+appWithoutState :: ReaderT Env IO (((), String), (Grid, Coor, PrevVal, Bool, Bool))
 appWithoutState = let coor = (,) <$> [0..3] <*> [0..3] in
-                    runStateT appWithoutWriter (testGrid, coor, (0,(0,0)), False) -- initial prevVal will be overwritten in the 1st run
+                    runStateT appWithoutWriter (testGrid, coor, (0,(0,0)), False, True) -- initial prevVal will be overwritten in the 1st run
 
-appWithoutReader :: IO (((), String), (Grid, Coor, PrevVal, Bool))
+appWithoutReader :: IO (((), String), (Grid, Coor, PrevVal, Bool, Bool))
 -- appWithoutReader :: App ()
 appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
 
 -- ==========================================================================
 
--- launchApp :: Env -> Grid-> IO (((), String), (Grid, Coor, PrevVal, Bool))
--- launchApp env grid = let coor = (,) <$> [0..3] <*> [0..3] in
---                        runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
-
-
-launchApp :: (Maybe Env, Maybe Grid)-> IO (((), String), (Grid, Coor, PrevVal, Bool))
-launchApp z = case z of
-                (Just env, Just grid) ->
-                  let coor = (,) <$> [0..3] <*> [0..3] in runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
-                (Just env, _) -> print ("Parsed only the Env: " ++ show env) >> return (((), ""), ([], [], (0,(0,0)), False))
-                _ ->  print "parser failed!"  >> return (((), ""), ([], [], (0,(0,0)), False))
-
-
-  -- print "Failed!!" >> return (((), ""), ([], [], (0,(0,0)), False))
-
-  -- let coor = (,) <$> [0..3] <*> [0..3] in
-  --                      runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
-
--- pack will convert String to Text
--- Prelude Data.Text> :t splitOn 
--- splitOn :: Text -> Text -> [Text]
--- Use "unpack" to convert back to String
-parseFile :: String -> IO [String]
-parseFile path = do
-                   s <- readFile path
-                   let str = T.splitOn (T.pack "\n") (T.pack s)
-                       cleanStr = take (length s - 1)  s in
-                      -- print cleanStr
-                      return $ T.unpack <$> T.splitOn (T.pack "\n") (T.pack cleanStr)
-
--- s = ["DIM=4x4","QUAD=2x2","_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
-convStr2VD :: [String] -> IO (Maybe Env, Maybe Grid)
-convStr2VD (d:q:xs) =
-                  -- TODO: remove the regex redundancy 
-                  let dimRegex = "^DIM=[0-9]+x[0-9]+$"
-                      quadRegex = "^QUAD=[0-9]+x[0-9]+$"
-                      gridRegex = "^((_|[0-9]),)+(_|[0-9])$"
-                  in
-                  if (d =~ dimRegex :: Bool) && (q =~ quadRegex :: Bool) then
-                    let fd = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack d) !! 1)
-                        fq = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack q) !! 1)
-                        dim =  fmap ((\x -> read x::Int ) . T.unpack) fd
-                        quad = fmap ((\x -> read x::Int ) . T.unpack) fq
-                        grid = convStr2Arr xs in
-
-                    if ( concat xs =~ gridRegex ::Bool ) then
-                      return (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Nothing)
-                    else
-                      return (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Just grid)
-
-                  else
-                    return (Nothing, Nothing)
-
-checkParser :: (Maybe Env, Maybe Grid) -> IO ()
-checkParser z = case z of
-                  (Just env, Just grid) -> putStrLn $ "\n\nSuccessfully parsed \nEnv = " ++ show env ++ "\nGrid = " ++ show grid ++ "\n\n"
-                  (Just env, _) -> putStrLn $ "\n\nParsed only the Env = " ++ show env ++ "\n\n"
-                  _ ->  putStrLn "\n\nparser failed!\n\n"
-
+launchApp :: (Maybe Env, Maybe Grid)-> IO (((), String), (Grid, Coor, PrevVal, Bool, Bool))
+launchApp (Just env, Just grid) = let coor = (,) <$> [0..3] <*> [0..3] in runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False, True)) env
+              -- case z of
+              --   (Just env, Just grid) ->
+              --     let coor = (,) <$> [0..3] <*> [0..3] in runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False, True)) env
+              --   (Just env, _) -> print ("Parsed only the Env: " ++ show env) >> return (((), ""), ([], [], (0,(0,0)), False, True))
+              --   _ ->  print "parser failed!"  >> return (((), ""), ([], [], (0,(0,0)), False, True))
 
 cli :: IO [String]
 cli = getArgs
@@ -225,17 +200,16 @@ cli = getArgs
 main :: IO ()
 main = do
          args <- cli
-         printArgs args
+        --  printArgs args -- For debug purpose 
          s <- parseFile $ head args
+         print s
          z <- convStr2VD s
-         checkParser z -- TODO : Put to condition to halt the execution
-         y <- launchApp z
-         writeFile "dump.txt" $ snd $ fst y
-         putStrLn $ snd $ fst y
+         check <- checkParser z -- TODO : Put to condition to halt the execution
+         if check then (do
+                  y <- launchApp z
+                  writeFile "dump.txt" $ snd $ fst y
+                  putStrLn $ snd $ fst y) else putStrLn "\n\nHalting ....\n\n"
 
-
--- Real world usage of uncurry
--- main = cli >>= (uncurry animate)
 
 -- ASCII sudoku art
 -- .---------------.
