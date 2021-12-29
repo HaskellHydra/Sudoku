@@ -54,7 +54,7 @@ getInts lxs = do
 
 -- .---------.
 -- | p1 | p2 |   
--- *----------   The entier puzzle can be thought 4 quadrants.
+-- *----------   The entier puzzle can be divided into 4 quadrants.
 -- | p3 | p4 |   Each quadrant is a 2x2 matrix since it is 4x4 puzzle  
 -- *---------*
 -- Since the puzzle is stored as list of rows to extract the numbers in a
