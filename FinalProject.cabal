@@ -40,7 +40,10 @@ executable sudoku-cli
 
 library sudoku
     build-depends:    base ^>=4.14.1.0
+                      , text
     exposed-modules:  Sudoku.CLI
-    -- other-modules:    Sudoku.Draw
+                      Sudoku.Helpers
+                      Sudoku.Types
+    -- other-modules:    Sudoku.Types
     hs-source-dirs:   src
     default-language: Haskell2010 
