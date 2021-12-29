@@ -60,7 +60,7 @@ cabal repl FinalProject.cabal
 :set -XFlexibleContexts
 ```
 
-# **do** syntax refernce
+# **do** syntax reference
 
 * Conditional **do** using **case**
 
