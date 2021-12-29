@@ -45,11 +45,10 @@ runApp = do
                 checkIfSolved
                 (_, _, _, solved, _) <- lift get
 
-                unless solved $
+                if not solved then (do
                   tell $ "\n\n"++ concat (replicate 50 "*") ++"\n** Running a new iteration\n"++ concat (replicate 50 "*") ++ "\n"
-
-                unless solved $                      -- If solved return else runApp. Then next statement 'runApp' is controlled by unless
-                  runApp                             -- If it is not yet solved rerun the App and reset all the co ordinates
+                  runApp
+                  ) else (do return ())
 
               (locxy:locxs) -> do
 
@@ -66,20 +65,12 @@ initialize = do
                (lxs, coor, prevInit, solved, init) <- lift get
                env@(Env dim quad n_x n_y) <- lift $ lift ask
 
-               when init $
-                 do {
-                   liftIO clear
-                 }
-
-               when init $
-                 tell $ "\n\n"++ concat (replicate 50 "*") ++"\n** Starting Sudoku Solver\n"++ concat (replicate 50 "*") ++ "\n\n"
-
-               when init $
-                 drawPuzzle $ head dim
-
-               when init $
-                 tell $ "\n\n" ++ concat (replicate 50 "*") ++ "\n\n"
-
+               if init then (do
+                         liftIO clear
+                         tell $ "\n\n"++ concat (replicate 50 "*") ++"\n** Starting Sudoku Solver\n"++ concat (replicate 50 "*") ++ "\n\n"
+                         drawPuzzle $ head dim
+                         tell $ "\n\n" ++ concat (replicate 50 "*") ++ "\n\n") else (do
+                 return ())
 
                lift $ put (lxs, coor, prevInit, solved, False) -- move to next location, pop the head of coor
 

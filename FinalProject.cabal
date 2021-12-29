@@ -47,8 +47,7 @@ library sudoku
                       , random         
                       , regex-tdfa
                       , process   
-    exposed-modules:  Sudoku.CLI
-                      Sudoku.Helpers
+    exposed-modules:  Sudoku.Helpers
                       Sudoku.Types
     -- other-modules:    Sudoku.Types
     hs-source-dirs:   src
