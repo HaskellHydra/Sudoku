@@ -15,7 +15,9 @@ import Control.Monad
 import Text.Regex.TDFA
 import qualified Text.Read as R
 import qualified Data.Text as T
-import Data.Maybe (Maybe(Nothing))
+import Data.List
+-- import Data.Maybe (Maybe(Nothing))
+
 
 -- The entire puzzle is stored as list of rows.
 -- Each row is a list of 4 numbers
@@ -28,18 +30,24 @@ import Data.Maybe (Maybe(Nothing))
 -- *---------------* 
 -- | 4 | 1 | 3 | 2 | ---> R4
 -- *---------------*
--- The stack for computation
+
+-- The stack for computation --TODO :: Create a State flag for initialization
 type App a = WriterT String (StateT (Grid, Coor, PrevVal, Solved) (ReaderT Env IO)) a
 
 runApp :: App ()
 runApp = do
            (lxs, coor, prevInit, solved) <- lift get
+           env@(Env dim quad n_x n_y) <- lift $ lift ask
            case coor of
               [] -> do
                 checkIfSolved
                 (_, _, _, solved) <- lift get
-                unless solved            -- If solved return else runApp. Then enxt statement 'runApp' is controlled by unless
-                  runApp                 -- If it is not yet solved rerun the App and reset all the co ordinates
+
+                unless solved $
+                  tell "\n\nRunning a new iteration\n\n"
+
+                unless solved $                      -- If solved return else runApp. Then next statement 'runApp' is controlled by unless
+                  runApp                             -- If it is not yet solved rerun the App and reset all the co ordinates
 
               (locxy:locxs) -> do
 
@@ -62,6 +70,8 @@ checkIfSolved = do
 writeIterLog :: App()
 writeIterLog = do
                  (lxs', coor', prev, _) <- lift get
+                 env@(Env dim quad n_x n_y) <- lift $ lift ask
+
                  let (x,y) = head coor'
                      eLoc@(Loc e xs) = lxs' !! x !! y
                      (prevVal, (prevX, prevY)) = prev
@@ -70,10 +80,16 @@ writeIterLog = do
                      then
                        tell $ "Found value for the location - (" ++ show x ++", "++ show y ++ "), new Value = " ++ show e ++ "\n"
                      else
-                       if (e == 0) && (length (head xs) > 1) then
-                         tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs++ "\n"
-                       else
-                         tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e++ "\n"
+                       when ((e == 0) && (length (head xs) > 1)) $
+                         tell $ "Found multiple predictions for the location - (" ++ show x ++", "++ show y ++ "), predicted values = " ++ show xs++ "\n" -- tell $ "Value at loc - (" ++ show x ++", "++ show y ++ ")" ++ " is " ++ show e++ "\n"
+                 
+                 -- TODO : reduce this redundancy
+                 let (x,y) = head coor'
+                     eLoc@(Loc e xs) = lxs' !! x !! y
+                     (prevVal, (prevX, prevY)) = prev
+                     in
+                   when (prevVal == 0 && prevVal /= e) $
+                     drawPuzzle $ head dim                   
 
                  return ()
 
@@ -82,7 +98,7 @@ writeIterLog = do
 getPossibleValues :: App ()
 getPossibleValues = do
                         (lxs, coor, prevInit, solved) <- lift get
-                        liftIO $ putStrLn $ "Solving for location - " ++ (\(x,y) -> "("++show x++","++ show y++")") (head coor)
+                        -- liftIO $ putStrLn $ "Solving for location - " ++ (\(x,y) -> "("++show x++","++ show y++")") (head coor)
                         let (x,y) = head coor
                             g = getInts <$> lxs
                             gT = getTranspose g
@@ -109,6 +125,20 @@ getPossibleValues = do
 
                         return  ()
 
+drawPuzzle :: Int -> App ()
+drawPuzzle x = do
+               (lxs, coor, prev, _) <- lift get
+               env@(Env dim quad n_x n_y) <- lift $ lift ask 
+
+               unless (x/=4)$
+                 tell $ "\t\t." ++ concat (replicate 15 "-") ++ ".\n"
+ 
+               case x of
+                 0 ->
+                   return ()
+                 _ -> do
+                   tell $ "\t\t| " ++ T.unpack ( T.replace (T.pack "0") (T.pack "X") (T.pack $ concat (intersperse " | " (show <$> (getInts $ lxs!!(4-x) )  ))) ) ++ " |\n" ++ "\t\t*" ++ concat (replicate 15 "-") ++ "*\n"
+                   drawPuzzle $ x - 1
 -- ==========================================================================
 -- For Manual testing
 testGrid :: Grid
@@ -135,15 +165,15 @@ appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
 
 
 launchApp :: (Maybe Env, Maybe Grid)-> IO (((), String), (Grid, Coor, PrevVal, Bool))
-launchApp z = case z of 
-                (Just env, Just grid) -> 
+launchApp z = case z of
+                (Just env, Just grid) ->
                   let coor = (,) <$> [0..3] <*> [0..3] in runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
                 (Just env, _) -> print ("Parsed only the Env: " ++ show env) >> return (((), ""), ([], [], (0,(0,0)), False))
                 _ ->  print "parser failed!"  >> return (((), ""), ([], [], (0,(0,0)), False))
 
-  
+
   -- print "Failed!!" >> return (((), ""), ([], [], (0,(0,0)), False))
-  
+
   -- let coor = (,) <$> [0..3] <*> [0..3] in
   --                      runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
 
@@ -183,11 +213,12 @@ convStr2VD (d:q:xs) =
                     return (Nothing, Nothing)
 
 checkParser :: (Maybe Env, Maybe Grid) -> IO ()
-checkParser z = case z of 
+checkParser z = case z of
                   (Just env, Just grid) -> putStrLn $ "\n\nSuccessfully parsed \nEnv = " ++ show env ++ "\nGrid = " ++ show grid ++ "\n\n"
                   (Just env, _) -> putStrLn $ "\n\nParsed only the Env = " ++ show env ++ "\n\n"
-                  _ ->  putStrLn "\n\nparser failed!\n\n"  
-  
+                  _ ->  putStrLn "\n\nparser failed!\n\n"
+
+
 cli :: IO [String]
 cli = getArgs
 
@@ -199,7 +230,8 @@ main = do
          z <- convStr2VD s
          checkParser z -- TODO : Put to condition to halt the execution
          y <- launchApp z
-         print y
+         writeFile "dump.txt" $ snd $ fst y
+         putStrLn $ snd $ fst y
 
 
 -- Real world usage of uncurry

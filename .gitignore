@@ -6,3 +6,4 @@
 \#*
 *.ghc.*
 .vscode
+dump.txt
