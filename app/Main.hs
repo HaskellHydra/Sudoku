@@ -3,8 +3,8 @@ module Main where
 -- TODO: Check the imports after completion
 
 -- import Sudoku.CLI (cli)
-import Sudoku.Helpers
 import Sudoku.Types
+import Sudoku.Helpers
 import Control.Monad.Trans.Writer.CPS
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans.Reader
@@ -12,6 +12,7 @@ import Control.Monad.Trans.Class (lift)
 import System.Environment
 import Control.Monad.IO.Class
 import Control.Monad
+import Text.Regex.TDFA
 import qualified Text.Read as R
 import qualified Data.Text as T
 import Data.Maybe (Maybe(Nothing))
@@ -132,29 +133,35 @@ appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
 -- Prelude Data.Text> :t splitOn 
 -- splitOn :: Text -> Text -> [Text]
 -- Use "unpack" to convert back to String
-parseFile :: String -> IO ()
+parseFile :: String -> IO [String]
 parseFile path = do
                    s <- readFile path
                    let str = T.splitOn (T.pack "\n") (T.pack s)
                        cleanStr = take (length s - 1)  s in
-                    print $ T.splitOn (T.pack "\n") (T.pack cleanStr)
+                      -- print cleanStr
+                      return $ T.unpack <$> T.splitOn (T.pack "\n") (T.pack cleanStr)
 
 -- TODO: Create a function to convert the ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] to proper 'Grid' type
 -- s = ["DIM=4x4","QUAD=2x2","_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
--- convStr2VD :: [String] -> (Maybe Env, Maybe Grid)
--- convStr2VD (d:q:xs) =
---                   -- TODO: remove the regex redundancy 
---                   let dimRegex = "^DIM=[0-9]+x[0-9]+$"
---                       quadRegex = "^QUAD=[0-9]+x[0-9]+$"
---                   in
---                   if (d =~ dimRegex :: Bool) && (q =~ quadRegex :: Bool) then
---                     let fd = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack d) !! 1)
---                         fq = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack q) !! 1)
---                         dim =  fmap ((\x -> read x::Int ) . T.unpack) fd
---                         quad = fmap ((\x -> read x::Int ) . T.unpack) fq in
---                         (Just $ Env {dim = dim, quad = quad}, Nothing)
---                   else
---                     (Nothing, Nothing)
+convStr2VD :: [String] -> (Maybe Env, Maybe Grid)
+convStr2VD (d:q:xs) =
+                  -- TODO: remove the regex redundancy 
+                  let dimRegex = "^DIM=[0-9]+x[0-9]+$"
+                      quadRegex = "^QUAD=[0-9]+x[0-9]+$"
+                  in
+                  if (d =~ dimRegex :: Bool) && (q =~ quadRegex :: Bool) then
+                    let fd = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack d) !! 1)
+                        fq = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack q) !! 1)
+                        dim =  fmap ((\x -> read x::Int ) . T.unpack) fd
+                        quad = fmap ((\x -> read x::Int ) . T.unpack) fq in
+                        (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Nothing)
+                  else
+                    (Nothing, Nothing)
+
+testParse :: [String] -> IO ()
+testParse s = case convStr2VD s of
+                (Just env, _) -> print $ "Parsed only the ENV: " ++ show env
+                _ ->  print "parser failed!"
 
 -- TODO: Mover helper functions into a new file
 
@@ -165,7 +172,9 @@ main :: IO ()
 main = do
          args <- cli
          printArgs args
-         parseFile $ head args
+         s <- parseFile $ head args
+         testParse s
+
 -- Real world usage of uncurry
 -- main = cli >>= (uncurry animate)
 

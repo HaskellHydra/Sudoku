@@ -39,8 +39,12 @@ executable sudoku-cli
     default-language: Haskell2010
 
 library sudoku
+-- transformers, random, regex-tdfa are added for cabal repl 
     build-depends:    base ^>=4.14.1.0
                       , text
+                      , transformers 
+                      , random         
+                      , regex-tdfa   
     exposed-modules:  Sudoku.CLI
                       Sudoku.Helpers
                       Sudoku.Types
