@@ -124,10 +124,29 @@ appWithoutState = let coor = (,) <$> [0..3] <*> [0..3] in
                     runStateT appWithoutWriter (testGrid, coor, (0,(0,0)), False) -- initial prevVal will be overwritten in the 1st run
 
 appWithoutReader :: IO (((), String), (Grid, Coor, PrevVal, Bool))
+-- appWithoutReader :: App ()
 appWithoutReader = runReaderT appWithoutState (Env [4,4] [2,2] 2 2)
 
 -- ==========================================================================
 
+-- launchApp :: Env -> Grid-> IO (((), String), (Grid, Coor, PrevVal, Bool))
+-- launchApp env grid = let coor = (,) <$> [0..3] <*> [0..3] in
+--                        runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
+
+
+launchApp :: (Maybe Env, Maybe Grid)-> IO (((), String), (Grid, Coor, PrevVal, Bool))
+launchApp z = case z of 
+                (Just env, Just grid) -> 
+                  -- print $ "Successfully parsed \n\n Env = " ++ show env ++ " Grid = " ++ show grid 
+                  let coor = (,) <$> [0..3] <*> [0..3] in runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
+                (Just env, _) -> print ("Parsed only the Env: " ++ show env) >> return (((), ""), ([], [], (0,(0,0)), False))
+                _ ->  print "parser failed!"  >> return (((), ""), ([], [], (0,(0,0)), False))
+
+  
+  -- print "Failed!!" >> return (((), ""), ([], [], (0,(0,0)), False))
+  
+  -- let coor = (,) <$> [0..3] <*> [0..3] in
+  --                      runReaderT (runStateT (runWriterT runApp) (grid, coor, (0,(0,0)), False)) env
 
 -- pack will convert String to Text
 -- Prelude Data.Text> :t splitOn 
@@ -143,25 +162,38 @@ parseFile path = do
 
 -- TODO: Create a function to convert the ["_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"] to proper 'Grid' type
 -- s = ["DIM=4x4","QUAD=2x2","_,3,4,_","4,_,_,2","1,_,_,3","_,2,1,_"]
-convStr2VD :: [String] -> (Maybe Env, Maybe Grid)
+convStr2VD :: [String] -> IO (Maybe Env, Maybe Grid)
 convStr2VD (d:q:xs) =
                   -- TODO: remove the regex redundancy 
                   let dimRegex = "^DIM=[0-9]+x[0-9]+$"
                       quadRegex = "^QUAD=[0-9]+x[0-9]+$"
+                      gridRegex = "^((_|[0-9]),)+(_|[0-9])$"
                   in
                   if (d =~ dimRegex :: Bool) && (q =~ quadRegex :: Bool) then
                     let fd = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack d) !! 1)
                         fq = T.splitOn  (T.pack "x") (T.splitOn (T.pack "=") (T.pack q) !! 1)
                         dim =  fmap ((\x -> read x::Int ) . T.unpack) fd
-                        quad = fmap ((\x -> read x::Int ) . T.unpack) fq in
-                        (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Nothing)
+                        quad = fmap ((\x -> read x::Int ) . T.unpack) fq
+                        grid = convStr2Arr xs in
+
+                    if ( concat xs =~ gridRegex ::Bool ) then
+                      return (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Nothing)
+                    else
+                      return (Just $ Env {dim = dim, quad = quad, n_x = head quad, n_y = head quad}, Just grid)
+
                   else
-                    (Nothing, Nothing)
+                    return (Nothing, Nothing)
 
 testParse :: [String] -> IO ()
-testParse s = case convStr2VD s of
-                (Just env, _) -> print $ "Parsed only the ENV: " ++ show env
-                _ ->  print "parser failed!"
+testParse s = do
+                z <- convStr2VD s
+                case z of 
+                  (Just env, Just grid) -> print $ "Successfully parsed Env and Grid: " ++ show env ++ "<====>" ++ show grid
+                  (Just env, _) -> print $ "Parsed only the Env: " ++ show env
+                  _ ->  print "parser failed!"  
+  
+  -- case convStr2VD s of
+
 
 -- TODO: Mover helper functions into a new file
 
@@ -173,7 +205,13 @@ main = do
          args <- cli
          printArgs args
          s <- parseFile $ head args
-         testParse s
+        --  print s
+        --  testParse s
+         z <- convStr2VD s
+         y <- launchApp z
+         print y
+        --  case z of 
+        --    (Just env, Just grid) -> print $ "Successfully parsed Env = " ++ show env ++ "  Grid = " ++ show grid 
 
 -- Real world usage of uncurry
 -- main = cli >>= (uncurry animate)
