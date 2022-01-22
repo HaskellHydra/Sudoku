@@ -25,6 +25,52 @@
   * Check the puzzle.txt for the text format to describe the puzzle.
 * The logs are stored in the Writer String and at the end of the program it is written to dump.txt
 
+# Summary
+
+The main program is split into the following function calls
+
+* The monad transformer stack used for the App is as shown below.
+
+```
+type App a = WriterT String (StateT (Grid, Coor, PrevVal, Solved, Init) (ReaderT Env IO)) a
+
+```
+
+* launchApp :: (Maybe Env, Maybe Grid)-> IO (((), String), (Grid, Coor, PrevVal, Bool, Bool))
+  * The launchApp will encapsulate the runApp function.
+  * The parameters are parsed from the cli function and used in the launchApp 
+* runApp :: App ()
+  * The runApp is the main loop of the program and responsible for sloving the entire puzzle using the below functions
+* initialize:: App ()
+  * This function is resposible for the intialization of the App and drawing the initial puzzle on to the screen
+* checkIfSolved:: App()
+  * This function will check if the puzzle is solved by going through all the cells of the puzzle. 
+* writeIterLog :: App()
+  * This will log all the newly found numbers for a cell and if a cell has 2 possible values.
+* getPossibleValues :: App ()
+ * This will output expected number for a empty cell by checking the coressponding row, column and the quadrant.
+* drawPuzzle :: Int -> App ()
+  * This function will draw the puzzle on to the screen at any given state.
+* The Helper.hs holds all the functions used for the cell computation and the Types.hs contains all the types used by the App.
+* File structure
+
+```
+├── app
+│   ├── Main.hs
+│   └── misc.hs
+├── CHANGELOG.md
+├── dump.txt
+├── FinalProject.cabal
+├── puzzle-d1.txt
+├── puzzle-d.txt
+├── puzzle.txt
+├── README.md
+└── src
+    └── Sudoku
+        ├── Helpers.hs
+        └── Types.hs
+```
+
 ## Future improvements
 
 * Use **hmatrix** library to store the puzzle instead of lists. It will be easy to perform matrix operations.
